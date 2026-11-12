@@ -44,7 +44,7 @@ CAMPAIGN_FIELDS = [
 ]
 
 # Change this if your storefront uses a different URL
-STORE_URL = "https://spend-and-pray.streamlit.app/hot_sauce_store"
+STORE_URL = "https://spend-and-pray-demo.streamlit.app/hot_sauce_store"
 
 
 # ----------------------------------
