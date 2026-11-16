@@ -1,281 +1,292 @@
+from collections import defaultdict
+from dashboard_charts import order_day, revenue_chart
 
+import plotly.graph_objects as go
 import streamlit as st
-import csv
-from pathlib import Path
 
-st.set_page_config(
-    page_title="Marketing Dashboard",
-    page_icon="📊",
-    layout="wide"
-)
-
-DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-ORDERS_FILE = DATA_DIR / "demo_orders.csv"
-CAMPAIGNS_FILE = DATA_DIR / "campaigns.csv"
-
-st.title("📊 Marketing Attribution Dashboard")
-st.write(
-    "Understand which marketing campaigns "
-    "are connected to customer purchases."
+from attribution_engine import calculate_kpis, process_orders
+from ui import (
+    BRAND_GOLD,
+    BRAND_GREEN,
+    BRAND_ORANGE,
+    BRAND_RED,
+    apply_theme,
+    chart_layout,
+    hero,
+    page_steps,
+    section_label,
 )
 
 
-def load_csv(path):
-    if not path.exists():
-        return []
+apply_theme()
 
-    with open(path, "r", newline="", encoding="utf-8-sig") as file:
-        return list(csv.DictReader(file))
+results, campaigns = process_orders()
 
+hero(
+    "Marketing performance at a glance",
+    "Compare channels and campaigns, understand attribution coverage, and use available evidence to guide the next budget decision.",
+    "Founder Decision Dashboard",
+    icon="📊",
+)
 
-def match_order(order, campaigns):
-    campaign_id = (order.get("campaign_id") or "").strip()
-    promo_code = (order.get("promo_code") or "").strip().upper()
+page_steps([
+    ("💰", "Measure", "Review revenue, orders, coverage, and estimated ROAS."),
+    ("⚖️", "Compare", "Contrast channels, campaigns, budgets, and results."),
+    ("🧭", "Decide", "Use the evidence and tracking gaps to guide spending."),
+])
 
-    id_match = next(
-        (
-            c for c in campaigns
-            if campaign_id == c["campaign_id"]
-        ),
-        None
-    ) if campaign_id else None
-
-    promo_match = next(
-        (
-            c for c in campaigns
-            if promo_code == c["promo_code"].upper()
-        ),
-        None
-    ) if promo_code else None
-
-    if id_match and promo_match:
-        if id_match["campaign_id"] != promo_match["campaign_id"]:
-            return "Needs Review", None
-
-    if id_match:
-        return "Matched", id_match
-
-    if promo_match:
-        return "Matched", promo_match
-
-    if campaign_id or promo_code:
-        return "Needs Review", None
-
-    return "Unattributed", None
-
-
-orders = load_csv(ORDERS_FILE)
-campaigns = load_csv(CAMPAIGNS_FILE)
-
-if not orders:
-    st.warning("No orders found. Place a demo order first.")
+if not results:
+    st.info("Place at least one demonstration order to populate the dashboard.")
     st.stop()
 
-if not campaigns:
-    st.warning("No campaigns found. Create a campaign first.")
-    st.stop()
-
-total_revenue = 0.0
-matched_revenue = 0.0
-matched_orders = 0
-
-status_counts = {
-    "Matched": 0,
-    "Unattributed": 0,
-    "Needs Review": 0
-}
-
-channel_results = {}
-campaign_results = {}
-
-for order in orders:
-    try:
-        revenue = float(order.get("order_total") or 0)
-    except ValueError:
-        revenue = 0.0
-
-    total_revenue += revenue
-
-    status, campaign = match_order(order, campaigns)
-    status_counts[status] += 1
-
-    if status == "Matched":
-        matched_orders += 1
-        matched_revenue += revenue
-
-        channel = campaign["channel"]
-        campaign_name = campaign["campaign_name"]
-
-        if channel not in channel_results:
-            channel_results[channel] = {
-                "orders": 0,
-                "revenue": 0.0
-            }
-
-        if campaign_name not in campaign_results:
-            campaign_results[campaign_name] = {
-                "orders": 0,
-                "revenue": 0.0
-            }
-
-        channel_results[channel]["orders"] += 1
-        channel_results[channel]["revenue"] += revenue
-
-        campaign_results[campaign_name]["orders"] += 1
-        campaign_results[campaign_name]["revenue"] += revenue
-
-
-# ----------------------------------
-# OVERVIEW
-# ----------------------------------
-
-st.divider()
-st.subheader("Performance Overview")
-
-coverage = matched_orders / len(orders) * 100
-
-col1, col2, col3, col4 = st.columns(4)
-
-col1.metric("Total Orders", len(orders))
-col2.metric("Total Revenue", f"${total_revenue:,.2f}")
-col3.metric("Matched Revenue", f"${matched_revenue:,.2f}")
-col4.metric("Attribution Coverage", f"{coverage:.1f}%")
-
-
-# ----------------------------------
-# ATTRIBUTION STATUS
-# ----------------------------------
-
-st.divider()
-st.subheader("Attribution Status")
-
-for status, count in status_counts.items():
-    st.write(f"**{status}: {count} orders**")
-    st.progress(count / len(orders))
-
-
-# ----------------------------------
-# CHANNEL PERFORMANCE
-# ----------------------------------
-
-st.divider()
-st.subheader("Marketing Channel Performance")
-
-if channel_results:
-    for channel, data in sorted(
-        channel_results.items(),
-        key=lambda item: item[1]["revenue"],
-        reverse=True
-    ):
-        with st.container(border=True):
-            st.write(f"**{channel}**")
-            col1, col2 = st.columns(2)
-            col1.metric("Matched Orders", data["orders"])
-            col2.metric(
-                "Matched Revenue",
-                f"${data['revenue']:,.2f}"
-            )
-else:
-    st.info("No matched marketing channels yet.")
-
-
-# ----------------------------------
-# CAMPAIGN PERFORMANCE
-# ----------------------------------
-
-st.divider()
-st.subheader("Campaign Performance")
-
-if campaign_results:
-    for name, data in sorted(
-        campaign_results.items(),
-        key=lambda item: item[1]["revenue"],
-        reverse=True
-    ):
-        with st.container(border=True):
-            st.write(f"**{name}**")
-            st.write(f"Orders: {data['orders']}")
-            st.write(f"Revenue: ${data['revenue']:,.2f}")
-else:
-    st.info("No matched campaigns yet.")
-
-# ----------------------------------
-# MARKETING BUDGET & ROAS
-# ----------------------------------
-
-st.divider()
-st.subheader("💰 Marketing Budget & ROAS")
+kpis = calculate_kpis(results)
 
 total_budget = 0.0
-
 for campaign in campaigns:
     try:
         total_budget += float(campaign.get("budget") or 0)
     except (ValueError, TypeError):
         pass
 
-estimated_roas = (
-    matched_revenue / total_budget
+budget_roas = (
+    kpis["matched_revenue"] / total_budget
     if total_budget > 0
     else None
 )
 
-col1, col2, col3 = st.columns(3)
+channel_summary = defaultdict(lambda: {"orders": 0, "revenue": 0.0})
+campaign_summary = defaultdict(lambda: {"orders": 0, "revenue": 0.0})
 
-col1.metric(
-    "Total Campaign Budget",
-    f"${total_budget:,.2f}"
-)
+for row in results:
+    if row["status"] != "Matched":
+        continue
+    channel_summary[row["channel"]]["orders"] += 1
+    channel_summary[row["channel"]]["revenue"] += row["revenue"]
+    campaign_summary[row["campaign_name"]]["orders"] += 1
+    campaign_summary[row["campaign_name"]]["revenue"] += row["revenue"]
 
-col2.metric(
-    "Matched Revenue",
-    f"${matched_revenue:,.2f}"
-)
+campaign_budget = {}
+campaign_channel = {}
+for campaign in campaigns:
+    name = campaign.get("campaign_name") or "Unnamed Campaign"
+    campaign_channel[name] = campaign.get("channel") or "Unknown"
+    try:
+        campaign_budget[name] = float(campaign.get("budget") or 0)
+    except (ValueError, TypeError):
+        campaign_budget[name] = 0.0
 
-col3.metric(
-    "Budget-Based ROAS",
-    f"{estimated_roas:.2f}x"
-    if estimated_roas is not None
-    else "N/A"
-)
-
-st.caption(
-    "Budget-based ROAS is an estimate using allocated "
-    "campaign budgets, not confirmed advertising expenditure."
-)
-
-
-# ----------------------------------
-# CHANNEL COMPARISON
-# ----------------------------------
-
-st.divider()
-st.subheader("📊 Revenue by Marketing Channel")
-
-if channel_results:
-
-    maximum_revenue = max(
-        data["revenue"]
-        for data in channel_results.values()
+best_channel = "No matched channel"
+if channel_summary:
+    best_channel = max(
+        channel_summary,
+        key=lambda channel: channel_summary[channel]["revenue"],
     )
 
-    for channel, data in sorted(
-        channel_results.items(),
-        key=lambda item: item[1]["revenue"],
-        reverse=True
-    ):
 
-        st.write(
-            f"**{channel} — ${data['revenue']:,.2f}**"
+section_label("Primary business KPIs")
+k1, k2, k3, k4 = st.columns(4)
+k1.metric("Total Revenue", f"${kpis['total_revenue']:,.2f}")
+k2.metric("Total Orders", kpis["total_orders"])
+k3.metric("Attribution Coverage", f"{kpis['coverage']:.1f}%")
+k4.metric(
+    "Budget-Based ROAS",
+    f"{budget_roas:.2f}x" if budget_roas is not None else "N/A",
+)
+
+with st.expander("How to interpret these KPIs"):
+    st.write(
+        "**Attribution coverage** is the percentage of orders matched to a saved campaign. "
+        "**Budget-based ROAS** divides matched revenue by the campaign budgets entered in the prototype. "
+        "It is an estimate and not confirmed channel profit."
+    )
+
+section_label("Diagnostic KPIs")
+s1, s2, s3, s4 = st.columns(4)
+s1.metric("Matched Revenue", f"${kpis['matched_revenue']:,.2f}")
+s2.metric("Average Order Value", f"${kpis['average_order_value']:,.2f}")
+s3.metric("Best Channel", best_channel)
+s4.metric("Needs Review", kpis["needs_review"])
+
+
+st.markdown("### Compare marketing channels")
+available_channels = sorted(channel_summary.keys())
+selected_channels = st.multiselect(
+    "Channels included in comparison",
+    options=available_channels,
+    default=available_channels,
+)
+
+filtered_channels = [
+    channel for channel in available_channels if channel in selected_channels
+]
+
+left_chart, right_chart = st.columns(2)
+
+with left_chart:
+    revenue_fig = go.Figure(
+        go.Bar(
+            x=filtered_channels,
+            y=[channel_summary[channel]["revenue"] for channel in filtered_channels],
+            marker_color=BRAND_RED,
+            text=[
+                f"${channel_summary[channel]['revenue']:,.0f}"
+                for channel in filtered_channels
+            ],
+            textposition="outside",
+            cliponaxis=False,
+            hovertemplate="%{x}<br>Revenue: $%{y:,.2f}<extra></extra>",
         )
+    )
+    revenue_fig.update_layout(
+        **chart_layout("Matched Revenue by Channel", "Revenue ($)")
+    )
+    revenue_fig.update_xaxes(title_text="Channel")
+    st.plotly_chart(revenue_fig, width="stretch", theme=None)
 
-        proportion = (
-            data["revenue"] / maximum_revenue
-            if maximum_revenue > 0
-            else 0
+with right_chart:
+    orders_fig = go.Figure(
+        go.Bar(
+            x=filtered_channels,
+            y=[channel_summary[channel]["orders"] for channel in filtered_channels],
+            marker_color=BRAND_ORANGE,
+            text=[channel_summary[channel]["orders"] for channel in filtered_channels],
+            textposition="outside",
+            cliponaxis=False,
+            hovertemplate="%{x}<br>Orders: %{y}<extra></extra>",
         )
+    )
+    orders_fig.update_layout(
+        **chart_layout("Matched Orders by Channel", "Orders")
+    )
+    orders_fig.update_xaxes(title_text="Channel")
+    st.plotly_chart(orders_fig, width="stretch", theme=None)
 
-        st.progress(proportion)
 
+st.markdown("### Compare spending and results")
+campaign_names = sorted(
+    set(campaign_budget.keys()) | set(campaign_summary.keys())
+)
+
+budget_revenue_fig = go.Figure()
+budget_revenue_fig.add_trace(
+    go.Bar(
+        name="Campaign Budget",
+        x=campaign_names,
+        y=[campaign_budget.get(name, 0) for name in campaign_names],
+        marker_color=BRAND_GOLD,
+    )
+)
+budget_revenue_fig.add_trace(
+    go.Bar(
+        name="Matched Revenue",
+        x=campaign_names,
+        y=[campaign_summary[name]["revenue"] for name in campaign_names],
+        marker_color=BRAND_RED,
+    )
+)
+budget_revenue_fig.update_layout(
+    barmode="group",
+    **chart_layout("Campaign Budget vs Matched Revenue", "Amount ($)", 410),
+)
+budget_revenue_fig.update_xaxes(title_text="Campaign")
+st.plotly_chart(budget_revenue_fig, width="stretch", theme=None)
+
+campaign_roas = []
+for name in campaign_names:
+    budget = campaign_budget.get(name, 0)
+    revenue = campaign_summary[name]["revenue"]
+    campaign_roas.append(revenue / budget if budget > 0 else 0)
+
+roas_fig = go.Figure(
+    go.Bar(
+        x=campaign_names,
+        y=campaign_roas,
+        marker_color=[
+            BRAND_GREEN if value >= 1 else BRAND_ORANGE
+            for value in campaign_roas
+        ],
+        text=[f"{value:.2f}x" for value in campaign_roas],
+        textposition="outside",
+            cliponaxis=False,
+        hovertemplate="%{x}<br>Estimated ROAS: %{y:.2f}x<extra></extra>",
+    )
+)
+roas_fig.add_hline(
+    y=1,
+    line_dash="dash",
+    line_color="#6f5b50",
+    annotation_text="1.0x reference",
+)
+roas_fig.update_layout(
+    **chart_layout("Estimated ROAS by Campaign", "Revenue per Budget Dollar")
+)
+roas_fig.update_xaxes(title_text="Campaign")
+st.plotly_chart(roas_fig, width="stretch", theme=None)
+
+
+st.markdown("### Tracking Quality and Sales Patterns")
+st.caption("These filters apply to both charts below. Other dashboard comparisons retain their own selection.")
+statuses = ["Matched", "Unattributed", "Needs Review"]
+selected_statuses = st.multiselect("Attribution statuses", statuses, default=statuses)
+valid_days = sorted({order_day(row.get("order_date")) for row in results} - {None})
+date_range = st.date_input("Order date range (UTC)", value=(valid_days[0], valid_days[-1])) if valid_days else ()
+weekly = st.selectbox("Revenue grouping", ["Daily", "Weekly"]) == "Weekly"
+filtered = [row for row in results if row["status"] in selected_statuses]
+if len(date_range) == 2:
+    filtered = [row for row in filtered if order_day(row.get("order_date")) is not None
+                and date_range[0] <= order_day(row.get("order_date")) <= date_range[1]]
+elif valid_days:
+    st.info("Choose both a start and end date to apply the date filter.")
+invalid_dates = sum(order_day(row.get("order_date")) is None for row in results)
+if invalid_dates:
+    st.caption(f"{invalid_dates} order(s) have missing or invalid dates and cannot be included in a date range.")
+
+# Full-width charts remain readable on tablets and narrow screens.
+st.markdown("#### Tracking Quality")
+if filtered:
+    counts = [sum(row["status"] == status for row in filtered) for status in statuses]
+    status_fig = go.Figure(go.Bar(
+        x=counts, y=statuses, orientation="h", marker_color=[BRAND_GREEN, "#687587", BRAND_GOLD],
+        text=counts, textposition="outside", cliponaxis=False,
+        hovertemplate="%{y}: %{x} orders<extra></extra>",
+    ))
+    status_fig.update_layout(**chart_layout("Attribution Status", height=410))
+    status_fig.update_layout(margin=dict(l=120, r=50, t=90, b=75), showlegend=False)
+    status_fig.update_xaxes(title_text="Orders", rangemode="tozero", dtick=1,
+                           range=[0, max(counts) * 1.25 or 1])
+    status_fig.update_yaxes(title_text="Status", automargin=True, type="category")
+    st.plotly_chart(status_fig, width="stretch", theme=None, config={"responsive": True})
 else:
-    st.info("No matched campaign revenue available.")
+    st.info("No orders match the selected filters.")
+
+st.markdown("#### Sales Patterns")
+trend_fig, trend_note = revenue_chart(filtered, weekly)
+if filtered:
+    st.plotly_chart(trend_fig, width="stretch", theme=None, config={"responsive": True})
+st.caption(trend_note)
+
+
+if kpis["coverage"] < 70:
+    st.markdown(
+        f"""
+        <div class="insight-box">
+            <strong>Decision note:</strong> Attribution coverage is {kpis['coverage']:.1f}%.
+            Review unattributed orders before shifting budget because the current channel comparison does not represent every purchase.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+elif best_channel != "No matched channel":
+    st.markdown(
+        f"""
+        <div class="insight-box">
+            <strong>Decision note:</strong> {best_channel} currently has the highest matched revenue.
+            Treat this as an association and validate it with additional orders before making a large budget change.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+st.caption(
+    "Budget-based ROAS uses entered campaign budgets and matched demonstration revenue. It does not represent confirmed profit or causal impact."
+)

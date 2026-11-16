@@ -1,31 +1,20 @@
-
-import streamlit as st
 import csv
-import uuid
 import io
-import qrcode
-
-from pathlib import Path
+import uuid
 from datetime import date, datetime, timezone
+from pathlib import Path
 from urllib.parse import urlencode
 
-# ----------------------------------
-# PAGE CONFIGURATION
-# ----------------------------------
+import qrcode
+import streamlit as st
 
-st.set_page_config(
-    page_title="Create Campaign",
-    page_icon="📢",
-    layout="wide"
-)
+from ui import apply_theme, hero, page_steps, section_label
 
-# ----------------------------------
-# DATA STORAGE
-# ----------------------------------
+
+apply_theme()
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
-
 CAMPAIGNS_FILE = DATA_DIR / "campaigns.csv"
 
 CAMPAIGN_FIELDS = [
@@ -40,384 +29,239 @@ CAMPAIGN_FIELDS = [
     "utm_campaign",
     "tracking_url",
     "promo_code",
-    "created_at"
+    "created_at",
 ]
 
-# Change this if your storefront uses a different URL
 STORE_URL = "https://spend-and-pray-demo.streamlit.app/hot_sauce_store"
 
+CHANNEL_DETAILS = {
+    "Paid Social": ("📱", "Track a paid social advertisement or promoted post."),
+    "Influencer": ("🎥", "Track a creator partnership or influencer promotion."),
+    "Farmers Market": ("🧺", "Use a QR code or promo code at an in-person market."),
+    "Pop-up Event": ("🏪", "Track a temporary retail event or product activation."),
+}
 
-# ----------------------------------
-# SAVE CAMPAIGN FUNCTION
-# ----------------------------------
+
+def load_campaigns():
+    if not CAMPAIGNS_FILE.exists():
+        return []
+    with open(CAMPAIGNS_FILE, "r", newline="", encoding="utf-8-sig") as file:
+        return list(csv.DictReader(file))
+
 
 def save_campaign(campaign):
-
     file_exists = CAMPAIGNS_FILE.exists()
-
-    with open(
-        CAMPAIGNS_FILE,
-        "a",
-        newline="",
-        encoding="utf-8"
-    ) as file:
-
-        writer = csv.DictWriter(
-            file,
-            fieldnames=CAMPAIGN_FIELDS
-        )
-
+    with open(CAMPAIGNS_FILE, "a", newline="", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=CAMPAIGN_FIELDS)
         if not file_exists or CAMPAIGNS_FILE.stat().st_size == 0:
             writer.writeheader()
-
         writer.writerow(campaign)
 
 
-# ----------------------------------
-# GENERATE QR CODE FUNCTION
-# ----------------------------------
-
 def generate_qr_code(url):
-
-    qr = qrcode.QRCode(
-        box_size=8,
-        border=2
-    )
-
+    qr = qrcode.QRCode(box_size=8, border=2)
     qr.add_data(url)
     qr.make(fit=True)
-
-    image = qr.make_image(
-        fill_color="black",
-        back_color="white"
-    )
-
+    image = qr.make_image(fill_color="#251b18", back_color="white")
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
-
     return buffer.getvalue()
 
 
-# ----------------------------------
-# PAGE HEADER
-# ----------------------------------
+def campaign_status(campaign):
+    try:
+        start = date.fromisoformat(campaign.get("start_date") or "")
+        end = date.fromisoformat(campaign.get("end_date") or "")
+    except ValueError:
+        return "Date unavailable"
+    today = date.today()
+    if today < start:
+        return "Upcoming"
+    if today > end:
+        return "Completed"
+    return "Active"
 
-st.title("📢 Create Marketing Campaign")
 
-st.write(
-    "Create marketing campaigns and automatically "
-    "generate tracking links, promo codes, and QR codes."
+campaigns = load_campaigns()
+total_budget = 0.0
+for saved_campaign in campaigns:
+    try:
+        total_budget += float(saved_campaign.get("budget") or 0)
+    except (ValueError, TypeError):
+        pass
+
+active_campaigns = sum(
+    1 for saved_campaign in campaigns
+    if campaign_status(saved_campaign) == "Active"
 )
 
-st.divider()
+hero(
+    "Build a trackable campaign",
+    "Create only the information the founder knows, then let the prototype generate the technical tracking assets automatically.",
+    "Campaign Builder",
+    icon="📣",
+)
 
+page_steps([
+    ("🎯", "Choose", "Select the channel, dates, and planned budget."),
+    ("⚙️", "Generate", "Create the tracking link, QR code, and promo code."),
+    ("🚀", "Share", "Use the campaign assets in the selected channel."),
+])
 
-# ----------------------------------
-# CAMPAIGN CREATION FORM
-# ----------------------------------
+section_label("Campaign portfolio")
+m1, m2, m3 = st.columns(3)
+m1.metric("Saved Campaigns", len(campaigns))
+m2.metric("Active Campaigns", active_campaigns)
+m3.metric("Total Planned Budget", f"${total_budget:,.2f}")
 
-st.subheader("Campaign Details")
+create_tab, saved_tab = st.tabs(["Create Campaign", "Saved Campaigns"])
 
-with st.form("create_campaign_form"):
+with create_tab:
+    st.markdown("### Campaign details")
+    st.caption("The founder enters five business fields. Tracking IDs and link parameters are generated by the system.")
 
-    campaign_name = st.text_input(
-        "Campaign Name",
-        placeholder="Fall Farmers Market Promotion"
-    )
+    with st.form("create_campaign_form"):
+        campaign_name = st.text_input(
+            "Campaign Name",
+            placeholder="Fall Farmers Market Promotion",
+        )
+        channel = st.selectbox(
+            "Marketing Channel",
+            list(CHANNEL_DETAILS.keys()),
+        )
+        icon, channel_description = CHANNEL_DETAILS[channel]
+        st.info(f"{icon} {channel_description}")
 
-    channel = st.selectbox(
-        "Marketing Channel",
-        [
-            "Paid Social",
-            "Influencer",
-            "Farmers Market",
-            "Pop-up Event"
-        ]
-    )
+        date_col1, date_col2 = st.columns(2)
+        with date_col1:
+            start_date = st.date_input("Start Date", value=date.today())
+        with date_col2:
+            end_date = st.date_input("End Date", value=date.today())
 
-    col1, col2 = st.columns(2)
-
-    with col1:
-        start_date = st.date_input(
-            "Start Date",
-            value=date.today()
+        budget = st.number_input(
+            "Planned Campaign Budget ($)",
+            min_value=0.0,
+            value=50.0,
+            step=10.0,
+            help="Enter the planned or allocated budget. This is not confirmed advertising expenditure.",
         )
 
-    with col2:
-        end_date = st.date_input(
-            "End Date",
-            value=date.today()
+        create_button = st.form_submit_button(
+            "Create Campaign Assets",
+            type="primary",
+            width="stretch",
         )
 
-    budget = st.number_input(
-        "Campaign Budget ($)",
-        min_value=0.0,
-        value=50.0,
-        step=10.0
-    )
+    if create_button:
+        if not campaign_name.strip():
+            st.error("Enter a campaign name.")
+        elif end_date < start_date:
+            st.error("The end date cannot be before the start date.")
+        else:
+            campaign_id = "CMP-" + uuid.uuid4().hex[:8].upper()
+            source_mapping = {
+                "Paid Social": "paid_social",
+                "Influencer": "influencer",
+                "Farmers Market": "farmers_market",
+                "Pop-up Event": "popup_event",
+            }
+            medium_mapping = {
+                "Paid Social": "paid_social",
+                "Influencer": "influencer",
+                "Farmers Market": "qr",
+                "Pop-up Event": "qr",
+            }
+            utm_source = source_mapping[channel]
+            utm_medium = medium_mapping[channel]
+            utm_campaign = "_".join(campaign_name.strip().lower().split())
+            promo_code = "HOT" + uuid.uuid4().hex[:6].upper()
+            tracking_params = {
+                "campaign_id": campaign_id,
+                "utm_source": utm_source,
+                "utm_medium": utm_medium,
+                "utm_campaign": utm_campaign,
+            }
+            tracking_url = STORE_URL + "?" + urlencode(tracking_params)
 
-    create_button = st.form_submit_button(
-        "🚀 Create Campaign",
-        use_container_width=True
-    )
+            campaign = {
+                "campaign_id": campaign_id,
+                "campaign_name": campaign_name.strip(),
+                "channel": channel,
+                "start_date": str(start_date),
+                "end_date": str(end_date),
+                "budget": round(budget, 2),
+                "utm_source": utm_source,
+                "utm_medium": utm_medium,
+                "utm_campaign": utm_campaign,
+                "tracking_url": tracking_url,
+                "promo_code": promo_code,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            save_campaign(campaign)
+            st.session_state.last_campaign = campaign
+            st.success("Campaign assets created successfully.")
 
-
-# ----------------------------------
-# CREATE CAMPAIGN
-# ----------------------------------
-
-if create_button:
-
-    if not campaign_name.strip():
-
-        st.error("Please enter a campaign name.")
-
-    elif end_date < start_date:
-
-        st.error("End date cannot be before start date.")
-
-    else:
-
-        campaign_id = (
-            "CMP-" + uuid.uuid4().hex[:8].upper()
-        )
-
-        source_mapping = {
-            "Paid Social": "paid_social",
-            "Influencer": "influencer",
-            "Farmers Market": "farmers_market",
-            "Pop-up Event": "popup_event"
-        }
-
-        medium_mapping = {
-            "Paid Social": "paid_social",
-            "Influencer": "influencer",
-            "Farmers Market": "qr",
-            "Pop-up Event": "qr"
-        }
-
-        utm_source = source_mapping[channel]
-        utm_medium = medium_mapping[channel]
-
-        utm_campaign = (
-            campaign_name.strip()
-            .lower()
-            .replace(" ", "_")
-        )
-
-        promo_code = (
-            "HOT" + uuid.uuid4().hex[:6].upper()
-        )
-
-        tracking_params = {
-            "campaign_id": campaign_id,
-            "utm_source": utm_source,
-            "utm_medium": utm_medium,
-            "utm_campaign": utm_campaign
-        }
-
-        tracking_url = (
-            STORE_URL + "?" + urlencode(tracking_params)
-        )
-
-        campaign = {
-            "campaign_id": campaign_id,
-            "campaign_name": campaign_name.strip(),
-            "channel": channel,
-            "start_date": str(start_date),
-            "end_date": str(end_date),
-            "budget": round(budget, 2),
-            "utm_source": utm_source,
-            "utm_medium": utm_medium,
-            "utm_campaign": utm_campaign,
-            "tracking_url": tracking_url,
-            "promo_code": promo_code,
-            "created_at": datetime.now(
-                timezone.utc
-            ).isoformat()
-        }
-
-        save_campaign(campaign)
-
-        st.session_state.last_campaign = campaign
-
-        st.success("Campaign created successfully!")
-
-
-# ----------------------------------
-# GENERATED TRACKING ASSETS
-# ----------------------------------
-
-if "last_campaign" in st.session_state:
-
-    campaign = st.session_state.last_campaign
-
-    st.divider()
-
-    st.subheader("Generated Campaign Assets")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        st.write("**Campaign ID**")
-        st.code(campaign["campaign_id"])
-
-        st.write("**Tracking URL**")
-        st.code(
-            campaign["tracking_url"],
-            language=None
-        )
-
-        st.write("**Promo Code**")
-        st.code(campaign["promo_code"])
-
-        st.link_button(
-            "🌶️ Open Store with Tracking",
-            campaign["tracking_url"]
-        )
-
-    with col2:
-
-        st.write("**Campaign QR Code**")
-
-        qr_bytes = generate_qr_code(
-            campaign["tracking_url"]
-        )
-
-        st.image(
-            qr_bytes,
-            width=220
-        )
-
-        st.download_button(
-            "⬇️ Download QR Code",
-            data=qr_bytes,
-            file_name=campaign["campaign_id"] + ".png",
-            mime="image/png"
-        )
-
-
-
-# ----------------------------------
-# SAVED CAMPAIGNS - LIST VIEW
-# ----------------------------------
-
-st.divider()
-st.subheader("📋 Saved Campaigns")
-
-if CAMPAIGNS_FILE.exists():
-
-    with open(
-        CAMPAIGNS_FILE,
-        "r",
-        newline="",
-        encoding="utf-8-sig"
-    ) as file:
-        campaigns = list(csv.DictReader(file))
-
-    if campaigns:
-
-        st.caption(f"{len(campaigns)} campaigns created")
-
-        # Column headings
-        h1, h2, h3, h4, h5 = st.columns(
-            [3, 2, 1.5, 1.5, 1.5]
-        )
-
-        h1.write("**Campaign Name**")
-        h2.write("**Channel**")
-        h3.write("**Budget**")
-        h4.write("**Campaign ID**")
-        h5.write("**Actions**")
-
-        st.divider()
-
-        # One row per campaign
-        for campaign in campaigns:
-
-            campaign_id = campaign["campaign_id"]
-            tracking_url = campaign["tracking_url"]
-
-            col1, col2, col3, col4, col5 = st.columns(
-                [3, 2, 1.5, 1.5, 1.5]
+    if st.session_state.get("last_campaign"):
+        campaign = st.session_state.last_campaign
+        st.markdown("### Ready to share")
+        details_col, qr_col = st.columns([1.4, 1])
+        with details_col:
+            with st.container(border=True):
+                st.write(f"**{campaign['campaign_name']}**")
+                a1, a2 = st.columns(2)
+                a1.metric("Channel", campaign["channel"])
+                a2.metric("Budget", f"${float(campaign['budget']):,.2f}")
+                st.write("**Campaign ID**")
+                st.code(campaign["campaign_id"])
+                st.write("**Promo Code**")
+                st.code(campaign["promo_code"])
+                st.write("**Customer Tracking Link**")
+                st.code(campaign["tracking_url"], language=None)
+                st.link_button(
+                    "Open Customer Store",
+                    campaign["tracking_url"],
+                    width="stretch",
+                )
+        with qr_col:
+            qr_bytes = generate_qr_code(campaign["tracking_url"])
+            st.image(qr_bytes, width=230)
+            st.download_button(
+                "Download QR Code",
+                data=qr_bytes,
+                file_name=f"{campaign['campaign_id']}.png",
+                mime="image/png",
+                width="stretch",
             )
 
-            col1.write(campaign["campaign_name"])
-            col2.write(campaign["channel"])
-            col3.write(f"${campaign['budget']}")
-            col4.write(campaign_id)
+with saved_tab:
+    st.markdown("### Campaign portfolio")
+    st.caption("Only decision-relevant campaign fields are shown. Technical UTM values remain in the backend.")
 
-            with col5:
-                if st.button(
-                    "View Options",
-                    key=f"view_{campaign_id}"
-                ):
-                    current = st.session_state.get(
-                        "selected_campaign"
-                    )
-
-                    st.session_state.selected_campaign = (
-                        None
-                        if current == campaign_id
-                        else campaign_id
-                    )
-
-            # Show options only for selected campaign
-            if st.session_state.get(
-                "selected_campaign"
-            ) == campaign_id:
-
-                with st.container(border=True):
-
-                    st.write(
-                        f"**{campaign['campaign_name']}**"
-                    )
-
-                    st.write(
-                        f"Promo Code: {campaign['promo_code']}"
-                    )
-
-                    st.write("**Tracking Link**")
-
-                    st.code(
-                        tracking_url,
-                        language=None
-                    )
-
-                    st.caption(
-                        "Use the copy icon in the code box "
-                        "to copy the tracking link."
-                    )
-
-                    st.link_button(
-                        "🌶️ Open Store",
-                        tracking_url
-                    )
-
-                    st.write("**QR Code**")
-
-                    qr_bytes = generate_qr_code(
-                        tracking_url
-                    )
-
-                    st.image(
-                        qr_bytes,
-                        width=180
-                    )
-
-                    st.download_button(
-                        "⬇️ Download QR Code",
-                        data=qr_bytes,
-                        file_name=f"{campaign_id}.png",
-                        mime="image/png",
-                        key=f"download_{campaign_id}"
-                    )
-
-            st.divider()
-
+    if not campaigns:
+        st.info("No campaigns have been created yet.")
     else:
-        st.info("No campaigns created yet.")
+        for saved_campaign in reversed(campaigns):
+            status = campaign_status(saved_campaign)
+            with st.container(border=True):
+                name_col, channel_col, budget_col, status_col = st.columns(
+                    [2.6, 1.5, 1.2, 1.2]
+                )
+                name_col.write(f"**{saved_campaign.get('campaign_name', 'Unnamed')}**")
+                channel_col.write(saved_campaign.get("channel", "—"))
+                try:
+                    display_budget = float(saved_campaign.get("budget") or 0)
+                except (ValueError, TypeError):
+                    display_budget = 0
+                budget_col.write(f"${display_budget:,.2f}")
+                status_col.write(status)
 
-else:
-    st.info("No campaigns created yet.")
+                with st.expander("View sharing assets"):
+                    st.write(f"Campaign ID: `{saved_campaign.get('campaign_id', '')}`")
+                    st.write(f"Promo Code: `{saved_campaign.get('promo_code', '')}`")
+                    st.code(saved_campaign.get("tracking_url", ""), language=None)
+                    st.link_button(
+                        "Open Store",
+                        saved_campaign.get("tracking_url", "#"),
+                    )
+
+st.caption("Campaign budget is planned spending. The dashboard reports budget-based, not profit-based, ROAS.")
