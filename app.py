@@ -17,7 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 apply_theme()
-st.caption("Spend & Pray · Demo v0.4 · UI & workflow update")
+st.caption("Spend & Pray · Demo v0.5 · Refined charts")
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 ORDERS_FILE = DATA_DIR / "demo_orders.csv"
@@ -280,7 +280,7 @@ else:
     with st.sidebar:
         st.markdown("### 🌶️ Spend & Pray")
         st.caption(f"Current experience: {role}")
-        st.caption("Demo v0.4 · UI & workflow update")
+        st.caption("Demo v0.5 · Refined charts")
         st.caption("Local preview" if (st.context.url or "").startswith(("http://127.0.0.1", "http://localhost")) else "Hosted demo")
         if st.button("Switch Experience", width="stretch"):
             change_role()

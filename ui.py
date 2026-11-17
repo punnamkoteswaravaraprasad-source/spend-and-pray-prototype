@@ -480,6 +480,11 @@ def apply_theme():
         .status-unattributed { background: #eceff3; color: #495463; }
         .status-review { background: #fff0c7; color: #8a5a00; }
 
+        .chart-explanation { border-left: 4px solid #d99a2b; background: #fff5dc; border-radius: 12px; padding: .85rem 1rem; margin: .5rem 0 1.2rem; color: #593b27; }
+        .chart-explanation p { margin: .35rem 0 0; line-height: 1.5; }
+        .st-key-sales_kpis, .st-key-marketing_kpis, .st-key-tracking_kpis { background: #fffdfa; padding: 1rem; border-radius: 16px; border-top: 4px solid #9e2a2b !important; margin-bottom: 1rem; }
+        .st-key-marketing_kpis { border-top-color: #d99a2b !important; }
+        .st-key-tracking_kpis { border-top-color: #2f7d5a !important; }
         .insight-box {
             border-left: 5px solid #D99A2B;
             background: #fff6dc;
@@ -604,3 +609,23 @@ def chart_layout(title, y_title=None, height=360):
         if "($)" in y_title:
             layout["yaxis"].update(tickprefix="$", tickformat=",.2f")
     return layout
+
+
+def show_chart(fig):
+    """Consistent clean chart controls and wrapped category labels."""
+    from textwrap import wrap
+    if not fig.layout.xaxis.tickmode:
+        labels = list(dict.fromkeys(str(x) for trace in fig.data for x in (getattr(trace, 'x', None) or []) if isinstance(x, str)))
+        if labels:
+            from html import escape
+            fig.update_xaxes(tickmode='array', tickvals=labels,
+                             ticktext=['<br>'.join(escape(line) for line in wrap(label, 18)) for label in labels],
+                             automargin=True)
+    fig.update_traces(selector=dict(type='bar'), cliponaxis=False)
+    st.plotly_chart(fig, width='stretch', theme=None,
+                    config={'displayModeBar': False, 'displaylogo': False, 'responsive': True, 'scrollZoom': False})
+
+
+def chart_explanation(title, text):
+    from html import escape
+    st.markdown(f'<div class="chart-explanation"><strong>{escape(title)}</strong><p>{escape(text)}</p></div>', unsafe_allow_html=True)

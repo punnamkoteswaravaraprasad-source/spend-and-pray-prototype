@@ -68,3 +68,40 @@ def revenue_chart(rows, weekly=False):
     if invalid:
         note += f" {invalid} order(s) excluded because their dates are missing or invalid."
     return fig, note
+
+
+def cumulative_revenue_chart(rows):
+    """An explicit order-sequence view; never present this as a date trend."""
+    valid = []
+    for index, row in enumerate(rows):
+        try:
+            stamp = datetime.fromisoformat(str(row.get('order_date', '')).strip().replace('Z', '+00:00'))
+            stamp = stamp.replace(tzinfo=timezone.utc) if stamp.tzinfo is None else stamp.astimezone(timezone.utc)
+            valid.append((stamp, index, row))
+        except (ValueError, TypeError):
+            continue
+    valid.sort(key=lambda item: (item[0], item[1]))
+    amounts, running = [], 0.0
+    for _, _, row in valid:
+        running += row['revenue']
+        amounts.append(running)
+    fig = go.Figure()
+    if len(valid) == 1:
+        fig.add_trace(go.Bar(x=[1], y=amounts, marker_color=BRAND_RED,
+                             text=[f'${running:,.2f}'], textposition='outside', cliponaxis=False))
+    elif valid:
+        fig.add_trace(go.Scatter(x=list(range(1, len(valid)+1)), y=amounts,
+                                 mode='lines+markers', line=dict(color=BRAND_RED, width=3, shape='hv'),
+                                 hovertemplate='Order %{x}<br>Cumulative revenue: $%{y:,.2f}<extra></extra>'))
+    fig.update_layout(**chart_layout('Cumulative Revenue by Order', 'Cumulative revenue ($)', 430))
+    fig.update_xaxes(title_text='Order sequence', dtick=1, rangemode='tozero')
+    fig.update_yaxes(tickprefix='$', tickformat=',.2f', rangemode='tozero')
+    note = 'Running total after each valid dated order, sorted chronologically in UTC. This is an order sequence, not a daily or weekly trend. Orders with identical timestamps retain their recorded order.'
+    if not valid:
+        note = 'No valid dated orders are available for the cumulative view.'
+    elif len(valid) == 1:
+        note = 'Only one valid dated order is available; a revenue bar is shown instead of a curve.'
+    excluded = len(rows) - len(valid)
+    if excluded:
+        note += f' {excluded} order(s) excluded because dates are missing or invalid; their revenue remains in all-date KPI totals.'
+    return fig, note
