@@ -7,10 +7,10 @@ def campaign_link(campaign, app_url=None):
               ("campaign_id", "utm_source", "utm_medium", "utm_campaign")}
     if not app_url:
         # Relative navigation works even when browser context is unavailable.
-        return "hot_sauce_store?" + urlencode(params)
+        return "./?" + urlencode(params)
     current = urlsplit(app_url)
     base = current.path.rstrip("/")
     if base.endswith("/create_campaign"):
         base = base[:-len("/create_campaign")]
     return urlunsplit((current.scheme, current.netloc,
-                       base + "/hot_sauce_store", urlencode(params), ""))
+                       base + "/", urlencode(params), ""))
