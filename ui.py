@@ -480,6 +480,7 @@ def apply_theme():
         .status-unattributed { background: #eceff3; color: #495463; }
         .status-review { background: #fff0c7; color: #8a5a00; }
 
+        .st-key-story_setup, .st-key-story_conflict, .st-key-story_resolution { background: rgba(255,253,249,.97); border-radius: 20px; padding: 1.3rem; margin: 1rem 0 1.6rem; box-shadow: 0 12px 28px rgba(80,30,20,.12); }
         .chart-explanation { border-left: 4px solid #d99a2b; background: #fff5dc; border-radius: 12px; padding: .85rem 1rem; margin: .5rem 0 1.2rem; color: #593b27; }
         .chart-explanation p { margin: .35rem 0 0; line-height: 1.5; }
         .st-key-sales_kpis, .st-key-marketing_kpis, .st-key-tracking_kpis { background: #fffdfa; padding: 1rem; border-radius: 16px; border-top: 4px solid #9e2a2b !important; margin-bottom: 1rem; }
@@ -619,8 +620,8 @@ def show_chart(fig):
         if labels:
             from html import escape
             fig.update_xaxes(tickmode='array', tickvals=labels,
-                             ticktext=['<br>'.join(escape(line) for line in wrap(label, 18)) for label in labels],
-                             automargin=True)
+                             ticktext=['<br>'.join(escape(line) for line in wrap(label, 11)) for label in labels],
+                             automargin=True, tickangle=0)
     fig.update_traces(selector=dict(type='bar'), cliponaxis=False)
     st.plotly_chart(fig, width='stretch', theme=None,
                     config={'displayModeBar': False, 'displaylogo': False, 'responsive': True, 'scrollZoom': False})
