@@ -25,7 +25,7 @@ def image_data_uri(path):
 
 
 def apply_theme():
-    page_background = ""
+    page_background = image_data_uri("images/bold-attribution-background-v4.png")
     st.markdown(
         """
         <style>
