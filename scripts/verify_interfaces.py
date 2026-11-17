@@ -19,7 +19,7 @@ with TemporaryDirectory(dir=root.parent) as tmp:
     a=page('pages/hot_sauce_store.py')
     a.segmented_control[0].set_value('Extra Hot').run();assert len([b for b in a.button if b.label=='Add to Cart'])==1
     next(b for b in a.button if b.key=='add_6').click().run()
-    a.text_input[0].set_value('NOT-A-CODE');button(a,'Place demo order').click().run();assert a.error and not a.exception
+    a.text_input(key='checkout_name').set_value('QA Customer'); next(w for w in a.text_input if w.label=='Promo Code (optional)').set_value('NOT-A-CODE');button(a,'Place demo order').click().run();assert a.error and not a.exception
     a.number_input[0].set_value(99).run()
     assert next(b for b in a.button if b.key=='add_6').disabled
     assert a.session_state['cart'][6] == 99

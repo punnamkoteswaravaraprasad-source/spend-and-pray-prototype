@@ -57,7 +57,8 @@ if not filtered_results:
     st.info("No orders are available in this category.")
 else:
     for order in filtered_results:
-        with st.expander(f"{order['status']} · {order['order_id']} · ${order['revenue']:,.2f}"):
+        with st.expander(f"{order['customer_name']} · {order['order_id']} · {order['status']} · ${order['revenue']:,.2f}"):
+            st.text(f"Customer: {order['customer_name']}")
             st.write(order.get('items') or 'No item details')
             st.write(f"Order date: {order.get('order_date') or 'Unavailable'}")
             st.write(f"Campaign: {order['campaign_name'] if order['status'] == 'Matched' else 'Not verified'}")

@@ -83,6 +83,7 @@ def process_orders():
         results.append(
             {
                 "order_id": order.get("order_id", ""),
+                "customer_name": (order.get("customer_name") or "").strip() or "Name not recorded",
                 "reason": reason,
                 "reviewed": bool(review),
                 "order_date": order.get("order_date", ""),

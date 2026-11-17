@@ -12,7 +12,7 @@ python -m venv .venv
 
 ## Workflows
 
-- Customers can filter six sauces by heat, adjust quantities, validate an optional promo code, and place a fictional order without entering personal details. No money is collected.
+- Customers can filter six sauces by heat, adjust quantities, validate an optional promo code, and place a fictional order with a required name and optional email. No money is collected and no confirmation email is sent. The saved order links the entered name to the unique order ID, recorded cart quantities, and order total.
 - Owners can create campaign links and QR codes. Copy links with the copy control in the link's code box. Links generated locally work only on the same computer.
 - The dashboard's channels, campaigns, statuses, and optional UTC order-date range apply to all KPIs and charts. Unknown channel and No verified campaign preserve visibility into attribution gaps.
 - Planned budgets are full campaign allocations. They are not actual spending, not prorated by selected order dates, and not a profit measure. Zero-budget ROAS is N/A.

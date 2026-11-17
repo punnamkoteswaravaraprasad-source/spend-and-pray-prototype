@@ -113,6 +113,10 @@ if st.session_state.get("last_order"):
     order = st.session_state.last_order
     with st.container(border=True):
         st.success("Your demonstration order was placed successfully.")
+        st.text(f"Customer: {order.get('customer_name') or 'Name not recorded'}")
+        st.markdown('**Your order**')
+        for item in order['items'].split('; '):
+            st.text(item)
         r1, r2, r3 = st.columns(3)
         r1.metric("Order", order["order_id"])
         r2.metric("Units", order.get("units", len(order["items"].split("; "))))
@@ -227,9 +231,11 @@ else:
         st.rerun()
 
     st.markdown("### Checkout")
-    st.caption("No name, email, address, or payment details are needed for this demo.")
+    st.caption("Your name connects this order to your bag. Email is optional; no payment is collected and no email is sent.")
 
     with st.form("checkout_form"):
+        customer_name = st.text_input('Your name', placeholder='Name for this order', max_chars=80, key='checkout_name')
+        customer_email = st.text_input('Email (optional)', placeholder='you@example.com', key='checkout_email')
         promo_code = st.text_input(
             "Promo Code (optional)",
             placeholder="Enter a campaign promo code",
@@ -249,12 +255,17 @@ else:
         )
 
         if place_order:
-            if not validate_promo_code(promo_code):
+            import re
+            if not customer_name.strip():
+                st.error('Enter your name so we can identify your order.')
+            elif customer_email.strip() and not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', customer_email.strip()):
+                st.error('Enter a valid email address or leave it blank.')
+            elif not validate_promo_code(promo_code):
                 st.error("That promo code was not recognized. Check the code or leave it blank.")
             else:
                 order = save_order(
-                    "Demo Customer",
-                    "",
+                    customer_name,
+                    customer_email,
                     promo_code,
                     total,
                 )
