@@ -441,7 +441,7 @@ def apply_theme():
         }
 
         .product-photo-wrap {
-            height: 265px;
+            height: 330px;
             margin: -.3rem auto .75rem;
             display: flex;
             justify-content: center;
@@ -452,7 +452,7 @@ def apply_theme():
         }
 
         .product-photo {
-            max-height: 260px;
+            max-height: 325px;
             max-width: 88%;
             object-fit: contain;
             filter: drop-shadow(0 15px 17px rgba(62,31,20,.19));
