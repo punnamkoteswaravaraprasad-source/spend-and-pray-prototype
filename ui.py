@@ -25,7 +25,7 @@ def image_data_uri(path):
 
 
 def apply_theme():
-    page_background = image_data_uri("images/bold-attribution-background-v4.png")
+    page_background = ""
     st.markdown(
         """
         <style>
@@ -176,8 +176,8 @@ def apply_theme():
         }
 
         .brand-hero {
-            min-height: 390px;
-            padding: 3.2rem;
+            min-height: 250px;
+            padding: 2rem;
             border-radius: 26px;
             color: white;
             background:
@@ -194,7 +194,7 @@ def apply_theme():
         }
 
         .hero-copy {
-            max-width: 560px;
+            max-width: 52%;
             position: relative;
             z-index: 1;
         }
@@ -222,14 +222,14 @@ def apply_theme():
         }
 
         .brand-hero h1 {
-            font-size: clamp(2rem, 4vw, 3.25rem);
+            font-size: clamp(1.7rem, 3vw, 2.65rem);
             margin-top: .35rem;
             margin-bottom: .55rem;
             text-shadow: 0 3px 22px rgba(0,0,0,.38);
         }
 
         .brand-hero p {
-            font-size: 1.18rem;
+            font-size: 1rem;
             line-height: 1.58;
             max-width: 590px;
             text-shadow: 0 2px 14px rgba(0,0,0,.45);
@@ -423,6 +423,8 @@ def apply_theme():
             box-shadow: inset 0 0 0 1px rgba(158,42,43,.09);
         }
 
+        button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid #275ca8 !important; outline-offset: 3px; }
+        .product-card p { min-height: 74px; }
         .product-card {
             background: linear-gradient(180deg, #fffaf1 0%, white 60%);
             border: 1px solid #ead9c8;
@@ -489,9 +491,11 @@ def apply_theme():
 
         @media (max-width: 760px) {
             .block-container { padding: 1.15rem .85rem 3rem; }
-            .brand-hero { min-height: 330px; padding: 1.35rem; border-radius: 16px; background-position: 64% center; }
-            .hero-copy { max-width: 74%; }
-            .product-card { min-height: auto; }
+            .brand-hero { min-height: 240px; padding: 1.35rem; border-radius: 16px; background-position: 64% center; }
+            .hero-copy { max-width: 85%; }
+            button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid #275ca8 !important; outline-offset: 3px; }
+        .product-card p { min-height: 74px; }
+        .product-card { min-height: auto; }
             .role-description { min-height: auto; }
             .page-step-grid { grid-template-columns: 1fr; }
             .hero-icon { width: 54px; height: 54px; right: 1rem; bottom: 1rem; font-size: 1.65rem; }
@@ -557,19 +561,8 @@ def section_label(text):
 
 
 def page_steps(items):
-    cards = "".join(
-        (
-            f'<div class="page-step">'
-            f'<span class="page-step-icon">{icon}</span>'
-            f'<div><strong>{title}</strong><span>{description}</span></div>'
-            f'</div>'
-        )
-        for icon, title, description in items
-    )
-    st.markdown(
-        f'<div class="page-step-grid">{cards}</div>',
-        unsafe_allow_html=True,
-    )
+    """Compatibility hook for compact pages; guidance now lives beside actions."""
+    return None
 
 
 def info_card(icon, title, description):
@@ -611,4 +604,3 @@ def chart_layout(title, y_title=None, height=360):
         if "($)" in y_title:
             layout["yaxis"].update(tickprefix="$", tickformat=",.2f")
     return layout
-

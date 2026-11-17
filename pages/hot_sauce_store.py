@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import streamlit as st
+from data_store import append_unique
 
 from ui import apply_theme, hero, image_data_uri, page_steps, section_label
 
@@ -30,39 +31,8 @@ ORDER_FIELDS = [
     "match_status",
 ]
 
-PRODUCTS = [
-    {
-        "id": 1,
-        "name": "Classic Red",
-        "price": 8.99,
-        "heat": "Medium",
-        "emoji": "🌶️",
-        "image": "images/classic-red-hotvile-v3.png",
-        "description": "A balanced everyday sauce with red chili, garlic, and a bright vinegar finish.",
-    },
-    {
-        "id": 2,
-        "name": "Mango Habanero",
-        "price": 10.99,
-        "heat": "Hot",
-        "emoji": "🥭",
-        "image": "images/mango-habanero-hotvile-v3.png",
-        "description": "Sweet mango up front with a bold habanero finish for serious heat lovers.",
-    },
-    {
-        "id": 3,
-        "name": "Smoky Chipotle",
-        "price": 9.99,
-        "heat": "Mild",
-        "emoji": "🔥",
-        "image": "images/smoky-chipotle-hotvile-v3.png",
-        "description": "Smoked peppers and warm spices create a rich, mellow sauce for tacos and grilling.",
-    },
-    {"id": 4, "name": "Roasted Garlic", "price": 9.49, "heat": "Mild", "emoji": "🧄", "image": "images/roasted-garlic-hotvile-v3.png", "description": "Roasted garlic and mellow red peppers for pizza, pasta, and everyday dipping."},
-    {"id": 5, "name": "Pineapple Jalapeño", "price": 10.49, "heat": "Medium", "emoji": "🍍", "image": "images/pineapple-jalapeno-hotvile-v3.png", "description": "Bright pineapple, green jalapeño, and lime for a sweet, tangy kick."},
-    {"id": 6, "name": "Ghost Pepper", "price": 12.99, "heat": "Extra Hot", "emoji": "👻", "image": "images/ghost-pepper-hotvile-v3.png", "description": "Intense ghost pepper heat with a smoky finish. Start with a small drop."},
+from catalog import PRODUCTS
 
-]
 
 
 def load_campaigns():
@@ -84,7 +54,9 @@ def validate_promo_code(code):
 
 def save_order(customer_name, customer_email, promo_code, total):
     tracking = st.session_state.get("campaign_tracking", {})
-    order_id = "ORD-" + uuid.uuid4().hex[:8].upper()
+    if 'checkout_token' not in st.session_state:
+        st.session_state.checkout_token = 'ORD-' + uuid.uuid4().hex[:12].upper()
+    order_id = st.session_state.checkout_token
 
     cart_items = []
     for product in PRODUCTS:
@@ -107,12 +79,7 @@ def save_order(customer_name, customer_email, promo_code, total):
         "match_status": "Pending",
     }
 
-    file_exists = ORDERS_FILE.exists()
-    with open(ORDERS_FILE, "a", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=ORDER_FIELDS)
-        if not file_exists or ORDERS_FILE.stat().st_size == 0:
-            writer.writeheader()
-        writer.writerow(order)
+    append_unique(ORDERS_FILE, ORDER_FIELDS, order, 'order_id')
 
     return order
 
@@ -131,7 +98,7 @@ if "cart" not in st.session_state:
 
 hero(
     "Fire, flavor, and a sauce for every table",
-    "Explore small-batch HotVile sauces, choose your heat, and place a fictional demonstration order.",
+    "Find your flavor. Choose your heat. Build your perfect sauce collection.",
     "HotVile Hot Sauce Co.",
     icon="🛍️",
 )
@@ -153,6 +120,7 @@ if st.session_state.get("last_order"):
         st.caption("No real payment was collected. This order supports the attribution demonstration.")
         if st.button("Start a New Order"):
             st.session_state.last_order = None
+            st.session_state.pop("checkout_token", None)
             st.rerun()
 
 
@@ -166,7 +134,10 @@ with filter_col:
     )
 with cart_col:
     total_units = sum(st.session_state.cart.values())
-    st.metric("Cart Items", total_units)
+    cart_total = sum(p['price'] * st.session_state.cart.get(p['id'], 0) for p in PRODUCTS)
+    st.metric('Your bag', f'${cart_total:,.2f}', help=f'{total_units} bottle(s)')
+    st.caption(f'{total_units} bottle(s) in your bag')
+    st.markdown('[View bag & checkout](#your-bag)')
 
 visible_products = [
     product
@@ -200,6 +171,7 @@ for index, product in enumerate(visible_products):
         if st.button(
             "Add to Cart",
             key=f"add_{product['id']}",
+            help=f"Add one bottle of {product['name']} to your bag",
             type="primary",
             width="stretch",
         ):
@@ -207,10 +179,15 @@ for index, product in enumerate(visible_products):
             st.session_state.cart[product_id] = (
                 st.session_state.cart.get(product_id, 0) + 1
             )
+            st.session_state.pop('checkout_token', None)
+            st.session_state['cart_feedback'] = f"{product['name']} added to your bag."
             st.rerun()
 
-
-st.markdown("### 🛒 Your cart")
+feedback = st.session_state.pop('cart_feedback', None)
+if feedback:
+    st.success(feedback)
+st.markdown('<span id="your-bag"></span>', unsafe_allow_html=True)
+st.markdown("### Your bag")
 
 if not st.session_state.cart:
     with st.container(border=True):
@@ -224,31 +201,28 @@ else:
 
         subtotal = quantity * product["price"]
         total += subtotal
-        name_col, minus_col, quantity_col, plus_col, price_col, remove_col = st.columns(
-            [3, 0.6, 0.7, 0.6, 1.2, 1]
-        )
-        name_col.write(f"**{product['emoji']} {product['name']}**")
-        if minus_col.button("−", key=f"minus_{product['id']}"):
-            new_quantity = quantity - 1
-            if new_quantity <= 0:
-                st.session_state.cart.pop(product["id"], None)
-            else:
-                st.session_state.cart[product["id"]] = new_quantity
-            st.rerun()
-        quantity_col.markdown(f"### {quantity}")
-        if plus_col.button("+", key=f"plus_{product['id']}"):
-            st.session_state.cart[product["id"]] = quantity + 1
-            st.rerun()
-        price_col.write(f"**${subtotal:,.2f}**")
-        if remove_col.button("Remove", key=f"remove_{product['id']}"):
-            st.session_state.cart.pop(product["id"], None)
-            st.rerun()
+        with st.container(border=True):
+            st.write(f"**{product['name']}** · ${product['price']:,.2f} each")
+            quantity_col, price_col = st.columns([2, 1])
+            new_quantity = quantity_col.number_input(
+                f"Quantity — {product['name']}", min_value=1, max_value=99,
+                value=quantity, step=1, key=f"quantity_{product['id']}_{quantity}")
+            if new_quantity != quantity:
+                st.session_state.cart[product['id']] = new_quantity
+                st.session_state.pop('checkout_token', None)
+                st.rerun()
+            price_col.metric('Subtotal', f'${subtotal:,.2f}')
+            if st.button(f"Remove {product['name']}", key=f"remove_{product['id']}"):
+                st.session_state.cart.pop(product['id'], None)
+                st.session_state.pop('checkout_token', None)
+                st.rerun()
 
     st.divider()
     total_col, clear_col = st.columns([3, 1])
     total_col.markdown(f"## Order total: ${total:,.2f}")
     if clear_col.button("Clear Cart", width="stretch"):
         st.session_state.cart = {}
+        st.session_state.pop("checkout_token", None)
         st.rerun()
 
     st.markdown("### Checkout")
@@ -268,7 +242,7 @@ else:
             else:
                 st.error("Code not recognized. Check it or leave it blank.")
         place_order = st.form_submit_button(
-            "Place Demonstration Order",
+            "Place demo order",
             type="primary",
             width="stretch",
         )
@@ -286,6 +260,7 @@ else:
                 order["units"] = sum(st.session_state.cart.values())
                 st.session_state.last_order = order
                 st.session_state.cart = {}
+                st.session_state.pop("checkout_token", None)
                 st.rerun()
 
 st.caption("Academic prototype • Demonstration orders only • No payment is collected")

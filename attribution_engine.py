@@ -1,4 +1,8 @@
 import csv
+import math
+from datetime import datetime, timezone
+import uuid
+from data_store import append_unique
 from pathlib import Path
 
 
@@ -47,17 +51,40 @@ def process_orders():
     orders = load_csv(ORDERS_FILE)
     campaigns = load_csv(CAMPAIGNS_FILE)
     results = []
+    reviews = {r['order_id']: r for r in load_csv(DATA_DIR / 'attribution_reviews.csv')}
+
 
     for order in orders:
         status, campaign = match_order(order, campaigns)
+        reason = ('Campaign ID and promo code cannot be verified together. Check the original campaign source.'
+                  if status == 'Needs Review' else 'No campaign ID or promo code was captured.'
+                  if status == 'Unattributed' else 'Tracking signal matched a saved campaign.')
+        review = reviews.get(order.get('order_id'))
+        if review:
+            if review['decision'] == 'Unattributed':
+                status, campaign = 'Unattributed', None
+                reason = 'Owner reviewed: ' + review['note']
+            elif review['decision'] == 'Matched':
+                manual = next((c for c in campaigns if c['campaign_id'] == review['campaign_id']), None)
+                if manual:
+                    status, campaign = 'Matched', manual
+                    reason = 'Owner assigned: ' + review['note']
+                else:
+                    status, campaign = 'Needs Review', None
+                    reason = 'Previously assigned campaign no longer exists. Review again.'
+
         try:
             revenue = float(order.get("order_total") or 0)
+            if not math.isfinite(revenue):
+                revenue = 0.0
         except (ValueError, TypeError):
             revenue = 0.0
 
         results.append(
             {
                 "order_id": order.get("order_id", ""),
+                "reason": reason,
+                "reviewed": bool(review),
                 "order_date": order.get("order_date", ""),
                 "items": order.get("items", ""),
                 "revenue": revenue,
@@ -109,3 +136,16 @@ def calculate_kpis(results):
         "coverage": coverage,
         "average_order_value": average_order_value,
     }
+
+
+def save_review(order_id, decision, campaign_id, note):
+    if decision not in ('Matched', 'Unattributed', 'Automatic') or not note.strip():
+        raise ValueError('Choose a decision and provide a review note.')
+    if not any(r.get('order_id') == order_id for r in load_csv(ORDERS_FILE)):
+        raise ValueError('Order no longer exists.')
+    if decision == 'Matched' and not any(c.get('campaign_id') == campaign_id for c in load_csv(CAMPAIGNS_FILE)):
+        raise ValueError('Select an existing campaign.')
+    row = dict(review_id=uuid.uuid4().hex, order_id=order_id, decision=decision,
+               campaign_id=campaign_id if decision == 'Matched' else '', note=note.strip(),
+               reviewed_at=datetime.now(timezone.utc).isoformat())
+    append_unique(DATA_DIR / 'attribution_reviews.csv', list(row), row, 'review_id')

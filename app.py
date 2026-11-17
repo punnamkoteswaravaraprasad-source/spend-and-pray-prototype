@@ -17,6 +17,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 apply_theme()
+st.caption("Spend & Pray · Demo v0.4 · UI & workflow update")
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 ORDERS_FILE = DATA_DIR / "demo_orders.csv"
@@ -104,9 +105,18 @@ def business_owner_home():
         ("📊", "Improve", "Compare performance before changing the budget."),
     ])
 
-    section_label("Current snapshot")
+    st.markdown('### Needs your attention')
+    gaps = kpis['unattributed_orders'] + kpis['needs_review']
+    if gaps:
+        st.warning(f"{gaps} order(s) need attribution attention: {kpis['needs_review']} to review and {kpis['unattributed_orders']} unattributed.")
+        st.page_link('pages/order_matching.py', label='Review orders and record evidence', icon='🔎')
+    elif orders:
+        st.success('Every order is matched. Compare results before changing your marketing plan.')
+    else:
+        st.info('Create your first campaign, then place a tracked demo order.')
+    section_label("Sales snapshot")
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Campaigns", len(campaigns))
+    k1.metric("Average order value", f"${kpis['average_order_value']:,.2f}")
     k2.metric("Demo Orders", len(orders))
     k3.metric("Total Revenue", f"${total_revenue:,.2f}")
     k4.metric("Attribution Coverage", f"{coverage:.1f}%")
@@ -138,19 +148,6 @@ def business_owner_home():
         st.progress(coverage / 100, text=f"{coverage:.1f}% of orders verified against saved campaigns")
     else:
         st.info("Place a demo order to see revenue trends and campaign performance.")
-
-    st.markdown("### How the prototype works")
-    step1, step2, step3, step4, step5 = st.columns(5)
-    with step1:
-        info_card("📣", "1. Create", "Choose a channel, dates, and budget.")
-    with step2:
-        info_card("🔗", "2. Share", "Use the generated link, QR code, or promo code.")
-    with step3:
-        info_card("🛒", "3. Purchase", "A customer completes a demonstration order.")
-    with step4:
-        info_card("🧩", "4. Match", "The system evaluates available tracking signals.")
-    with step5:
-        info_card("📊", "5. Compare", "The founder reviews channels, campaigns, and gaps.")
 
     st.markdown("### Owner tools")
     left, middle, right = st.columns(3)
@@ -206,7 +203,7 @@ def business_owner_home():
 if st.session_state.user_role is None:
     hero(
         "Know what brings customers to your store",
-        "Spend & Pray is a marketing attribution prototype for HotVile Hot Sauce Co. Select the experience you want to explore.",
+        "Shop HotVile sauces or explore the business dashboard.",
         "HotVile Hot Sauce Co.",
         icon="🌶️",
     )
@@ -283,6 +280,8 @@ else:
     with st.sidebar:
         st.markdown("### 🌶️ Spend & Pray")
         st.caption(f"Current experience: {role}")
+        st.caption("Demo v0.4 · UI & workflow update")
+        st.caption("Local preview" if (st.context.url or "").startswith(("http://127.0.0.1", "http://localhost")) else "Hosted demo")
         if st.button("Switch Experience", width="stretch"):
             change_role()
 

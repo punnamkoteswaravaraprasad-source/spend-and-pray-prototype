@@ -4,6 +4,9 @@ import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
 from campaign_links import campaign_link
+from urllib.parse import urlsplit
+from data_store import append_unique
+from reporting import amount
 
 import qrcode
 import streamlit as st
@@ -52,12 +55,8 @@ def load_campaigns():
 
 
 def save_campaign(campaign):
-    file_exists = CAMPAIGNS_FILE.exists()
-    with open(CAMPAIGNS_FILE, "a", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=CAMPAIGN_FIELDS)
-        if not file_exists or CAMPAIGNS_FILE.stat().st_size == 0:
-            writer.writeheader()
-        writer.writerow(campaign)
+    append_unique(CAMPAIGNS_FILE, CAMPAIGN_FIELDS, campaign, 'campaign_id')
+
 
 
 def generate_qr_code(url):
@@ -116,6 +115,10 @@ m1.metric("Saved Campaigns", len(campaigns))
 m2.metric("Active Campaigns", active_campaigns)
 m3.metric("Total Planned Budget", f"${total_budget:,.2f}")
 
+current_host = urlsplit(st.context.url or '').hostname
+if current_host in ('127.0.0.1', 'localhost', '::1'):
+    st.info('Local links and QR codes work only on this computer. Create sharing assets from the hosted app before sharing with customers.')
+
 create_tab, saved_tab = st.tabs(["Create Campaign", "Saved Campaigns"])
 
 with create_tab:
@@ -157,6 +160,11 @@ with create_tab:
     if create_button:
         if not campaign_name.strip():
             st.error("Enter a campaign name.")
+        elif any((c.get('campaign_name') or '').strip().casefold() == campaign_name.strip().casefold()
+                 and c.get('channel') == channel and c.get('start_date') == str(start_date)
+                 and c.get('end_date') == str(end_date) and amount(c.get('budget')) == budget
+                 for c in campaigns):
+            st.error('This campaign already exists. Open Saved Campaigns to use its sharing assets.')
         elif end_date < start_date:
             st.error("The end date cannot be before the start date.")
         else:
@@ -201,7 +209,7 @@ with create_tab:
             }
             save_campaign(campaign)
             st.session_state.last_campaign = campaign
-            st.success("Campaign assets created successfully.")
+            st.rerun()
 
     if st.session_state.get("last_campaign"):
         campaign = st.session_state.last_campaign
@@ -260,6 +268,9 @@ with saved_tab:
                 with st.expander("View sharing assets"):
                     st.write(f"Promo Code: `{saved_campaign.get('promo_code', '')}`")
                     st.code(current_campaign_link(saved_campaign), language=None)
+                    st.image(generate_qr_code(current_campaign_link(saved_campaign)), width=180)
+                    st.download_button('Download QR', generate_qr_code(current_campaign_link(saved_campaign)),
+                                       file_name=f"{saved_campaign['campaign_id']}.png", mime='image/png', key=f"qr_{saved_campaign['campaign_id']}")
                     st.link_button(
                         "Open Store",
                         current_campaign_link(saved_campaign),

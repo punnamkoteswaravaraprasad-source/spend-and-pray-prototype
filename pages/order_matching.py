@@ -2,7 +2,7 @@ from datetime import datetime
 
 import streamlit as st
 
-from attribution_engine import calculate_kpis, process_orders
+from attribution_engine import calculate_kpis, process_orders, save_review
 from ui import apply_theme, hero, page_steps, section_label, status_pill
 
 
@@ -56,37 +56,29 @@ with count_col:
 if not filtered_results:
     st.info("No orders are available in this category.")
 else:
-    header = st.columns([1.5, 1.35, 2.4, 1.1, 1.7, 1.4])
-    header[0].write("**Order**")
-    header[1].write("**Date**")
-    header[2].write("**Items**")
-    header[3].write("**Revenue**")
-    header[4].write("**Campaign**")
-    header[5].write("**Status**")
-    st.divider()
-
     for order in filtered_results:
-        row = st.columns([1.5, 1.35, 2.4, 1.1, 1.7, 1.4])
-        row[0].write(order["order_id"])
-
-        raw_date = order.get("order_date") or ""
-        try:
-            formatted_date = datetime.fromisoformat(
-                raw_date.replace("Z", "+00:00")
-            ).strftime("%b %d, %Y")
-        except ValueError:
-            formatted_date = "—"
-
-        row[1].write(formatted_date)
-        row[2].write(order.get("items") or "—")
-        row[3].write(f"${order['revenue']:,.2f}")
-        row[4].write(
-            order["campaign_name"]
-            if order["status"] == "Matched"
-            else "—"
-        )
-        row[5].markdown(status_pill(order["status"]), unsafe_allow_html=True)
-        st.divider()
+        with st.expander(f"{order['status']} · {order['order_id']} · ${order['revenue']:,.2f}"):
+            st.write(order.get('items') or 'No item details')
+            st.write(f"Order date: {order.get('order_date') or 'Unavailable'}")
+            st.write(f"Campaign: {order['campaign_name'] if order['status'] == 'Matched' else 'Not verified'}")
+            st.info(order['reason'])
+            with st.form(f"review_{order['order_id']}"):
+                decision = st.selectbox('Review decision', ['Assign to campaign', 'Keep unattributed', 'Restore automatic matching'])
+                campaign_options = {c['campaign_id']: c for c in campaigns}
+                campaign_id = st.selectbox('Campaign to assign', list(campaign_options),
+                    format_func=lambda key: f"{campaign_options[key]['campaign_name']} · {key[-4:]}") if campaigns else None
+                note = st.text_input('Evidence / review note', help='Record why you chose this attribution. Original tracking is preserved.')
+                if st.form_submit_button('Save Review', type='primary'):
+                    action = {'Assign to campaign':'Matched','Keep unattributed':'Unattributed','Restore automatic matching':'Automatic'}[decision]
+                    try:
+                        save_review(order['order_id'], action, campaign_id, note)
+                    except ValueError as error:
+                        st.error(str(error))
+                    else:
+                        st.session_state['review_saved'] = order['order_id']
+                        st.rerun()
+if st.session_state.pop('review_saved', None):
+    st.success('Review saved. KPIs and charts now use the updated attribution. Original tracking remains unchanged.')
 
 with st.expander("How order matching works"):
     st.markdown(
