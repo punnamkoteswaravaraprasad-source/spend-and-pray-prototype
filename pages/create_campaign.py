@@ -3,7 +3,7 @@ import io
 import uuid
 from datetime import date, datetime, timezone
 from pathlib import Path
-from urllib.parse import urlencode
+from campaign_links import campaign_link
 
 import qrcode
 import streamlit as st
@@ -32,7 +32,9 @@ CAMPAIGN_FIELDS = [
     "created_at",
 ]
 
-STORE_URL = "https://spend-and-pray-demo.streamlit.app/hot_sauce_store"
+def current_campaign_link(campaign):
+    return campaign_link(campaign, st.context.url)
+
 
 CHANNEL_DETAILS = {
     "Paid Social": ("📱", "Track a paid social advertisement or promoted post."),
@@ -181,7 +183,7 @@ with create_tab:
                 "utm_medium": utm_medium,
                 "utm_campaign": utm_campaign,
             }
-            tracking_url = STORE_URL + "?" + urlencode(tracking_params)
+            tracking_url = current_campaign_link(tracking_params)
 
             campaign = {
                 "campaign_id": campaign_id,
@@ -216,14 +218,14 @@ with create_tab:
                 st.write("**Promo Code**")
                 st.code(campaign["promo_code"])
                 st.write("**Customer Tracking Link**")
-                st.code(campaign["tracking_url"], language=None)
+                st.code(current_campaign_link(campaign), language=None)
                 st.link_button(
                     "Open Customer Store",
-                    campaign["tracking_url"],
+                    current_campaign_link(campaign),
                     width="stretch",
                 )
         with qr_col:
-            qr_bytes = generate_qr_code(campaign["tracking_url"])
+            qr_bytes = generate_qr_code(current_campaign_link(campaign))
             st.image(qr_bytes, width=230)
             st.download_button(
                 "Download QR Code",
@@ -258,10 +260,10 @@ with saved_tab:
                 with st.expander("View sharing assets"):
                     st.write(f"Campaign ID: `{saved_campaign.get('campaign_id', '')}`")
                     st.write(f"Promo Code: `{saved_campaign.get('promo_code', '')}`")
-                    st.code(saved_campaign.get("tracking_url", ""), language=None)
+                    st.code(current_campaign_link(saved_campaign), language=None)
                     st.link_button(
                         "Open Store",
-                        saved_campaign.get("tracking_url", "#"),
+                        current_campaign_link(saved_campaign),
                     )
 
 st.caption("Campaign budget is planned spending. The dashboard reports budget-based, not profit-based, ROAS.")
