@@ -522,7 +522,7 @@ def hero(
     title,
     subtitle,
     eyebrow="Spend & Pray",
-    background_image="images/hero-premium-v2.png",
+    background_image="images/hero-hotvile-v3.png",
     icon="🌶️",
 ):
     background_uri = image_data_uri(background_image) if background_image else ""
@@ -611,3 +611,4 @@ def chart_layout(title, y_title=None, height=360):
         if "($)" in y_title:
             layout["yaxis"].update(tickprefix="$", tickformat=",.2f")
     return layout
+
