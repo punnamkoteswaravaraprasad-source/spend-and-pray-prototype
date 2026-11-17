@@ -171,13 +171,14 @@ for index, product in enumerate(visible_products):
         if st.button(
             "Add to Cart",
             key=f"add_{product['id']}",
-            help=f"Add one bottle of {product['name']} to your bag",
+            help=f"Add one bottle of {product['name']} to your bag (maximum 99)",
+            disabled=st.session_state.cart.get(product["id"], 0) >= 99,
             type="primary",
             width="stretch",
         ):
             product_id = product["id"]
             st.session_state.cart[product_id] = (
-                st.session_state.cart.get(product_id, 0) + 1
+                min(99, st.session_state.cart.get(product_id, 0) + 1)
             )
             st.session_state.pop('checkout_token', None)
             st.session_state['cart_feedback'] = f"{product['name']} added to your bag."
