@@ -109,7 +109,7 @@ s4.metric("Needs Review", kpis["needs_review"])
 
 
 st.markdown("### Compare marketing channels")
-available_channels = sorted(channel_summary.keys())
+available_channels = sorted(set(channel_summary.keys()) | {c.get("channel") or "Unknown" for c in campaigns})
 selected_channels = st.multiselect(
     "Channels included in comparison",
     options=available_channels,
@@ -120,7 +120,7 @@ filtered_channels = [
     channel for channel in available_channels if channel in selected_channels
 ]
 
-left_chart, right_chart = st.columns(2)
+left_chart, right_chart, spending_chart = st.columns(3)
 
 with left_chart:
     revenue_fig = go.Figure(
@@ -138,7 +138,7 @@ with left_chart:
         )
     )
     revenue_fig.update_layout(
-        **chart_layout("Matched Revenue by Channel", "Revenue ($)")
+        **chart_layout("Matched Revenue<br>by Channel", "Revenue ($)")
     )
     revenue_fig.update_xaxes(title_text="Channel")
     st.plotly_chart(revenue_fig, width="stretch", theme=None)
@@ -156,16 +156,30 @@ with right_chart:
         )
     )
     orders_fig.update_layout(
-        **chart_layout("Matched Orders by Channel", "Orders")
+        **chart_layout("Matched Orders<br>by Channel", "Orders")
     )
     orders_fig.update_xaxes(title_text="Channel")
     st.plotly_chart(orders_fig, width="stretch", theme=None)
 
 
+with spending_chart:
+    budgets = defaultdict(float)
+    for campaign in campaigns:
+        try:
+            budgets[campaign.get("channel") or "Unknown"] += float(campaign.get("budget") or 0)
+        except (ValueError, TypeError):
+            pass
+    fig = go.Figure(go.Bar(x=filtered_channels, y=[budgets[c] for c in filtered_channels], marker_color=BRAND_GOLD,
+                          hovertemplate="%{x}<br>Planned budget: $%{y:,.2f}<extra></extra>"))
+    fig.update_layout(**chart_layout("Planned Budget<br>by Channel", "Budget ($)"))
+    fig.update_xaxes(title_text="Channel")
+    st.plotly_chart(fig, width="stretch", theme=None)
+st.caption("Red: matched revenue • Orange: matched orders • Gold: planned campaign budget, not actual spend. Channel selection applies to all three charts.")
+
+
 st.markdown("### Compare spending and results")
-campaign_names = sorted(
-    set(campaign_budget.keys()) | set(campaign_summary.keys())
-)
+all_campaign_names = sorted(set(campaign_budget.keys()) | set(campaign_summary.keys()))
+campaign_names = st.multiselect("Campaigns included in comparison", all_campaign_names, default=all_campaign_names)
 
 budget_revenue_fig = go.Figure()
 budget_revenue_fig.add_trace(

@@ -58,6 +58,10 @@ PRODUCTS = [
         "image": "images/smoky-chipotle-v2.png",
         "description": "Smoked peppers and warm spices create a rich, mellow sauce for tacos and grilling.",
     },
+    {"id": 4, "name": "Roasted Garlic", "price": 9.49, "heat": "Mild", "emoji": "🧄", "image": "", "description": "Roasted garlic and mellow red peppers for pizza, pasta, and everyday dipping."},
+    {"id": 5, "name": "Pineapple Jalapeño", "price": 10.49, "heat": "Medium", "emoji": "🍍", "image": "", "description": "Bright pineapple, green jalapeño, and lime for a sweet, tangy kick."},
+    {"id": 6, "name": "Ghost Pepper", "price": 12.99, "heat": "Extra Hot", "emoji": "👻", "image": "", "description": "Intense ghost pepper heat with a smoky finish. Start with a small drop."},
+
 ]
 
 
@@ -144,7 +148,7 @@ if st.session_state.get("last_order"):
         st.success("Your demonstration order was placed successfully.")
         r1, r2, r3 = st.columns(3)
         r1.metric("Order", order["order_id"])
-        r2.metric("Items", len(order["items"].split("; ")))
+        r2.metric("Units", order.get("units", len(order["items"].split("; "))))
         r3.metric("Total", f"${order['order_total']:,.2f}")
         st.caption("No real payment was collected. This order supports the attribution demonstration.")
         if st.button("Start a New Order"):
@@ -157,7 +161,7 @@ filter_col, cart_col = st.columns([3, 1])
 with filter_col:
     heat_filter = st.segmented_control(
         "Filter by heat level",
-        options=["All", "Mild", "Medium", "Hot"],
+        options=["All", "Mild", "Medium", "Hot", "Extra Hot"],
         default="All",
     )
 with cart_col:
@@ -170,16 +174,20 @@ visible_products = [
     if heat_filter in (None, "All") or product["heat"] == heat_filter
 ]
 
-product_columns = st.columns(len(visible_products))
-for column, product in zip(product_columns, visible_products):
-    heat_class = f"heat-{product['heat'].lower()}"
-    product_image = image_data_uri(product["image"])
+for index, product in enumerate(visible_products):
+    if index % 3 == 0:
+        product_columns = st.columns(3)
+    column = product_columns[index % 3]
+    heat_class = f"heat-{product['heat'].lower().replace(' ', '-')}"
+    product_image = image_data_uri(product["image"]) if product["image"] else ""
+    product_visual = (f'<img class="product-photo" src="{product_image}" alt="{product["name"]} hot sauce bottle">'
+                      if product_image else f'<div class="flavor-visual" aria-label="{product["name"]} flavor illustration"><span>{product["emoji"]}</span><strong>{product["name"]}</strong><small>HOTVILE • SMALL BATCH</small></div>')
     with column:
         st.markdown(
             f"""
             <div class="product-card">
                 <div class="product-photo-wrap">
-                    <img class="product-photo" src="{product_image}" alt="{product['name']} hot sauce bottle">
+                    {product_visual}
                 </div>
                 <span class="heat-pill {heat_class}">{product['heat']} heat</span>
                 <h3>{product['name']}</h3>
@@ -244,15 +252,21 @@ else:
         st.rerun()
 
     st.markdown("### Checkout")
-    st.caption("Only the information required for this classroom demonstration is requested.")
+    st.caption("No name, email, address, or payment details are needed for this demo.")
 
     with st.form("checkout_form"):
-        customer_name = st.text_input("Name", placeholder="Demo Customer")
-        customer_email = st.text_input("Email", placeholder="demo@example.com")
         promo_code = st.text_input(
             "Promo Code (optional)",
             placeholder="Enter a campaign promo code",
         )
+        check_promo = st.form_submit_button("Check Promo Code")
+        if check_promo:
+            if not promo_code.strip():
+                st.info("Promo codes are optional. You can continue without one.")
+            elif validate_promo_code(promo_code):
+                st.success("Code recognized. It identifies the campaign; demo prices are unchanged.")
+            else:
+                st.error("Code not recognized. Check it or leave it blank.")
         place_order = st.form_submit_button(
             "Place Demonstration Order",
             type="primary",
@@ -260,19 +274,16 @@ else:
         )
 
         if place_order:
-            if not customer_name.strip() or not customer_email.strip():
-                st.error("Enter a name and email to continue.")
-            elif "@" not in customer_email:
-                st.error("Enter a valid demonstration email address.")
-            elif not validate_promo_code(promo_code):
+            if not validate_promo_code(promo_code):
                 st.error("That promo code was not recognized. Check the code or leave it blank.")
             else:
                 order = save_order(
-                    customer_name,
-                    customer_email,
+                    "Demo Customer",
+                    "",
                     promo_code,
                     total,
                 )
+                order["units"] = sum(st.session_state.cart.values())
                 st.session_state.last_order = order
                 st.session_state.cart = {}
                 st.rerun()

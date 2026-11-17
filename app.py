@@ -3,7 +3,11 @@ from pathlib import Path
 
 import streamlit as st
 
-from ui import apply_theme, hero, info_card, page_steps, section_label
+from ui import apply_theme, hero, info_card, page_steps, section_label, chart_layout, BRAND_RED, BRAND_GOLD
+from attribution_engine import process_orders, calculate_kpis
+from dashboard_charts import revenue_chart
+import plotly.graph_objects as go
+from collections import defaultdict
 
 
 st.set_page_config(
@@ -83,12 +87,9 @@ def business_owner_home():
         except (TypeError, ValueError):
             pass
 
-    tracked_orders = sum(
-        1 for order in orders
-        if (order.get("campaign_id") or "").strip()
-        or (order.get("promo_code") or "").strip()
-    )
-    coverage = tracked_orders / len(orders) * 100 if orders else 0
+    results, _ = process_orders()
+    kpis = calculate_kpis(results)
+    coverage = kpis["coverage"]
 
     hero(
         "Turn marketing activity into evidence",
@@ -108,7 +109,35 @@ def business_owner_home():
     k1.metric("Campaigns", len(campaigns))
     k2.metric("Demo Orders", len(orders))
     k3.metric("Total Revenue", f"${total_revenue:,.2f}")
-    k4.metric("Tracking Coverage", f"{coverage:.1f}%")
+    k4.metric("Attribution Coverage", f"{coverage:.1f}%")
+
+    st.markdown("### Sales and marketing snapshot")
+    if results:
+        trend, note = revenue_chart(results)
+        st.plotly_chart(trend, width="stretch", theme=None)
+        st.caption(note)
+        channels = defaultdict(float)
+        performance = defaultdict(float)
+        for row in results:
+            if row["status"] == "Matched":
+                channels[row["channel"]] += row["revenue"]
+                performance[row["campaign_name"]] += row["revenue"]
+        for title, values, axis in [("Revenue by Channel", channels, "Channel"), ("Campaign Performance", performance, "Campaign")]:
+            if values:
+                labels = sorted(values, key=values.get, reverse=True)
+                fig = go.Figure(go.Bar(x=labels, y=[values[label] for label in labels], marker_color=BRAND_RED,
+                                      hovertemplate="%{x}<br>Revenue: $%{y:,.2f}<extra></extra>"))
+                fig.update_layout(**chart_layout(title, "Revenue ($)", 410))
+                fig.update_xaxes(title_text=axis)
+                st.plotly_chart(fig, width="stretch", theme=None)
+        section_label("Tracking quality")
+        q1, q2, q3 = st.columns(3)
+        q1.metric("Matched", kpis["matched_orders"])
+        q2.metric("Unattributed", kpis["unattributed_orders"])
+        q3.metric("Needs Review", kpis["needs_review"])
+        st.progress(coverage / 100, text=f"{coverage:.1f}% of orders verified against saved campaigns")
+    else:
+        st.info("Place a demo order to see revenue trends and campaign performance.")
 
     st.markdown("### How the prototype works")
     step1, step2, step3, step4, step5 = st.columns(5)
@@ -158,11 +187,11 @@ def business_owner_home():
 
     if orders and coverage < 70:
         st.warning(
-            "Tracking coverage is below 70%. Review unattributed orders before changing the marketing budget."
+            "Attribution coverage is below 70%. Review unattributed orders before changing the marketing budget."
         )
     elif orders:
         st.success(
-            "Most demonstration orders contain a usable tracking signal. Review channel comparisons in the dashboard."
+            "Most demonstration orders match a saved campaign. Review channel comparisons in the dashboard."
         )
     else:
         st.info(

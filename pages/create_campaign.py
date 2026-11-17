@@ -213,8 +213,8 @@ with create_tab:
                 a1, a2 = st.columns(2)
                 a1.metric("Channel", campaign["channel"])
                 a2.metric("Budget", f"${float(campaign['budget']):,.2f}")
-                st.write("**Campaign ID**")
-                st.code(campaign["campaign_id"])
+                with st.expander("Internal reference"):
+                    st.code(campaign["campaign_id"])
                 st.write("**Promo Code**")
                 st.code(campaign["promo_code"])
                 st.write("**Customer Tracking Link**")
@@ -258,7 +258,6 @@ with saved_tab:
                 status_col.write(status)
 
                 with st.expander("View sharing assets"):
-                    st.write(f"Campaign ID: `{saved_campaign.get('campaign_id', '')}`")
                     st.write(f"Promo Code: `{saved_campaign.get('promo_code', '')}`")
                     st.code(current_campaign_link(saved_campaign), language=None)
                     st.link_button(

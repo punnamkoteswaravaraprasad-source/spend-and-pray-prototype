@@ -468,6 +468,11 @@ def apply_theme():
 
         .heat-mild { background: #e5f5eb; color: #246b45; }
         .heat-medium { background: #fff0c7; color: #8a5a00; }
+        .flavor-visual { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .6rem; width: 85%; height: 230px; border-radius: 70px 70px 25px 25px; background: linear-gradient(150deg, #ffdf87, #f47b35); color: #542216; box-shadow: 0 12px 20px #9e2a2b25; }
+        .flavor-visual span { font-size: 5rem; }
+        .flavor-visual strong { font-size: 1.3rem; }
+        .flavor-visual small { font-size: .65rem; letter-spacing: .1em; }
+        .heat-extra-hot { background: #562135; color: white; }
         .heat-hot { background: #fde2dd; color: #a83227; }
         .status-matched { background: #e5f5eb; color: #246b45; }
         .status-unattributed { background: #eceff3; color: #495463; }
